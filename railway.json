@@ -1,7 +1,8 @@
 {
   "build": {
     "env": {
-      "PYTHON_VERSION": "3.11"
+      "AWS_ACCESS_KEY_ID": "tu_clave",
+      "AWS_SECRET_ACCESS_KEY": "tu_secreto"
     }
   },
   "start": "uvicorn main:app --host 0.0.0.0 --port 8000"
