@@ -1,3 +1,2 @@
 # Textract API
-
-API para extraer texto de imágenes y PDFs usando AWS Textract.
+Servicio FastAPI para extracción de texto usando AWS Textract.

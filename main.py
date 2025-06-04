@@ -1,43 +1,40 @@
-from fastapi import FastAPI, UploadFile, File
+
+from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import JSONResponse
 import boto3
-import io
-import os
+import logging
+from botocore.exceptions import BotoCoreError, ClientError
 
 app = FastAPI()
 
-# Configuración del cliente de Textract
-textract = boto3.client(
-    'textract',
-    aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-    aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
-    region_name="us-east-1"
-)
+# Configurar logs
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("textract-api")
 
 @app.post("/extract")
 async def extract_text(file: UploadFile = File(...)):
-    content = await file.read()
-    file_stream = io.BytesIO(content)
-
-    ext = file.filename.lower().split(".")[-1]
-
+    logger.info("📥 Archivo recibido: %s", file.filename)
     try:
-        if ext == "pdf":
-            response = textract.start_document_text_detection(
-                DocumentLocation={'Bytes': content}
-            )
-            return JSONResponse(
-                status_code=400,
-                content={"error": "Textract StartDocumentTextDetection requiere S3 para PDFs"}
-            )
-        elif ext in ["jpg", "jpeg", "png"]:
-            response = textract.detect_document_text(
-                Document={'Bytes': content}
-            )
-            blocks = response.get("Blocks", [])
-            extracted_text = " ".join([b["Text"] for b in blocks if b["BlockType"] == "LINE"])
-            return {"text": extracted_text}
-        else:
-            return JSONResponse(status_code=400, content={"error": "Formato no soportado"})
+        contents = await file.read()
+        logger.info("📦 Tamaño del archivo: %d bytes", len(contents))
+
+        # Cliente Textract
+        client = boto3.client("textract", region_name="us-east-1")
+
+        # Llamar a Textract
+        logger.info("🚀 Enviando archivo a AWS Textract...")
+        response = client.analyze_document(
+            Document={"Bytes": contents},
+            FeatureTypes=["TABLES", "FORMS"]
+        )
+
+        logger.info("✅ Respuesta de AWS recibida correctamente")
+        return response
+
+    except (BotoCoreError, ClientError) as aws_error:
+        logger.error("❌ Error en AWS Textract: %s", str(aws_error))
+        return JSONResponse(status_code=500, content={"error": "AWS Textract error"})
+
     except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        logger.error("❌ Error general en /extract: %s", str(e))
+        return JSONResponse(status_code=500, content={"error": "Internal Server Error"})
