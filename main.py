@@ -1,40 +1,46 @@
-
-from fastapi import FastAPI, File, UploadFile
-from fastapi.responses import JSONResponse
 import boto3
-import logging
-from botocore.exceptions import BotoCoreError, ClientError
+import uuid
+from fastapi import FastAPI, UploadFile, File
+from fastapi.responses import JSONResponse
+import os
 
 app = FastAPI()
 
-# Configurar logs
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("textract-api")
+s3_client = boto3.client("s3")
+textract_client = boto3.client("textract")
+
+BUCKET_NAME = os.getenv("BUCKET_NAME", "facturas-automatizadas-tuempresa")
 
 @app.post("/extract")
 async def extract_text(file: UploadFile = File(...)):
-    logger.info("📥 Archivo recibido: %s", file.filename)
+    contents = await file.read()
+    file_key = f"uploads/{uuid.uuid4()}_{file.filename}"
+
     try:
-        contents = await file.read()
-        logger.info("📦 Tamaño del archivo: %d bytes", len(contents))
-
-        # Cliente Textract
-        client = boto3.client("textract", region_name="us-east-1")
-
-        # Llamar a Textract
-        logger.info("🚀 Enviando archivo a AWS Textract...")
-        response = client.analyze_document(
-            Document={"Bytes": contents},
-            FeatureTypes=["TABLES", "FORMS"]
-        )
-
-        logger.info("✅ Respuesta de AWS recibida correctamente")
-        return response
-
-    except (BotoCoreError, ClientError) as aws_error:
-        logger.error("❌ Error en AWS Textract: %s", str(aws_error))
-        return JSONResponse(status_code=500, content={"error": "AWS Textract error"})
-
+        s3_client.put_object(Bucket=BUCKET_NAME, Key=file_key, Body=contents)
     except Exception as e:
-        logger.error("❌ Error general en /extract: %s", str(e))
-        return JSONResponse(status_code=500, content={"error": "Internal Server Error"})
+        return JSONResponse(content={"error": f"Error subiendo a S3: {str(e)}"}, status_code=500)
+
+    try:
+        response = textract_client.start_document_text_detection(
+            DocumentLocation={"S3Object": {"Bucket": BUCKET_NAME, "Name": file_key}}
+        )
+        job_id = response["JobId"]
+        return {"message": "Análisis iniciado", "job_id": job_id}
+    except Exception as e:
+        return JSONResponse(content={"error": f"Error iniciando Textract: {str(e)}"}, status_code=500)
+
+@app.get("/extract/{job_id}")
+def get_results(job_id: str):
+    try:
+        response = textract_client.get_document_text_detection(JobId=job_id)
+        status = response["JobStatus"]
+
+        if status == "SUCCEEDED":
+            blocks = response.get("Blocks", [])
+            text = " ".join([b["Text"] for b in blocks if b["BlockType"] == "LINE"])
+            return {"text": text}
+        else:
+            return {"status": status}
+    except Exception as e:
+        return JSONResponse(content={"error": f"Error obteniendo resultados: {str(e)}"}, status_code=500)

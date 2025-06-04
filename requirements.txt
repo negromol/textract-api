@@ -1,4 +1,4 @@
-fastapi
-uvicorn[standard]
 boto3
+fastapi
+uvicorn
 python-multipart
