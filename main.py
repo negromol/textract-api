@@ -25,17 +25,17 @@ async def extract_text(file: UploadFile = File(...)):
     except Exception as e:
         return JSONResponse(content={"error": f"Error subiendo a S3: {str(e)}"}, status_code=500)
 
-    try:
-        print(f"Analizando archivo: bucket={BUCKET_NAME}, key={file_key}")
-        response = textract_client.start_document_text_detection(
-            DocumentLocation={"S3Object": {"Bucket": BUCKET_NAME, "Name": file_key}}
-        )
-        job_id = response["JobId"]
-        print(f"Análisis iniciado con JobId: {job_id}")
+   try:
+    print(f"Analizando archivo: bucket={BUCKET_NAME}, key={file_key}")
+    response = textract_client.start_document_text_detection(
+        DocumentLocation={"S3Object": {"Bucket": BUCKET_NAME, "Name": file_key}}
+    )
+    job_id = response["JobId"]
+    print(f"Análisis iniciado con JobId: {job_id}")
     return {"message": "Análisis iniciado", "job_id": job_id}
-    except Exception as e:
-        print(f"ERROR al iniciar Textract: {e}")
-        return JSONResponse(content={"error": f"Error iniciando Textract: {str(e)}"}, status_code=500)
+except Exception as e:
+    print(f"ERROR al iniciar Textract: {e}")
+    return JSONResponse(content={"error": f"Error iniciando Textract: {str(e)}"}, status_code=500)
 
 
 @app.get("/extract/{job_id}")
