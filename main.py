@@ -6,8 +6,12 @@ import os
 
 app = FastAPI()
 
-s3_client = boto3.client("s3")
-textract_client = boto3.client("textract")
+# Obtener la región desde la variable de entorno o usar 'us-west-2' por defecto
+region = os.getenv("AWS_REGION", "us-west-2")
+
+# Inicializar los clientes de AWS con región explícita
+s3_client = boto3.client("s3", region_name=region)
+textract_client = boto3.client("textract", region_name=region)
 
 BUCKET_NAME = os.getenv("BUCKET_NAME", "facturas-automatizadas-tuempresa")
 
