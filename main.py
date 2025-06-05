@@ -6,10 +6,10 @@ import os
 
 app = FastAPI()
 
-# Obtener la región desde la variable de entorno o usar 'us-west-2' por defecto
+# Obtener la región desde variable de entorno o usar una por defecto
 region = os.getenv("AWS_REGION", "us-west-2")
 
-# Inicializar los clientes de AWS con región explícita
+# Inicializar clientes con región explícita
 s3_client = boto3.client("s3", region_name=region)
 textract_client = boto3.client("textract", region_name=region)
 
@@ -21,6 +21,9 @@ async def extract_text(file: UploadFile = File(...)):
     file_key = f"uploads/{uuid.uuid4()}_{file.filename}"
 
     try:
+        # Subir el archivo a S3
+        s3_client.put_object(Bucket=BUCKET_NAME, Key=file_key, Body=contents)
+
         print(f"Analizando archivo: bucket={BUCKET_NAME}, key={file_key}")
         response = textract_client.start_document_text_detection(
             DocumentLocation={"S3Object": {"Bucket": BUCKET_NAME, "Name": file_key}}
