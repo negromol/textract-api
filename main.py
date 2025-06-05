@@ -6,36 +6,32 @@ import os
 
 app = FastAPI()
 
-# Obtener la región desde variable de entorno o usar una por defecto
-region = os.getenv("AWS_REGION", "us-west-2")
+# Región corregida (por defecto us-east-2)
+region = os.getenv("AWS_REGION", "us-east-2")
 
-# Inicializar clientes con región explícita
+# Inicializar clientes con la región correcta
 s3_client = boto3.client("s3", region_name=region)
 textract_client = boto3.client("textract", region_name=region)
 
-# Nombre del bucket desde variable de entorno o valor por defecto
 BUCKET_NAME = os.getenv("BUCKET_NAME", "facturas-automatizadas-tuempresa")
 
 @app.post("/extract")
 async def extract_text(file: UploadFile = File(...)):
-    try:
-        # Leer el contenido del archivo
-        contents = await file.read()
-        file_key = f"uploads/{uuid.uuid4()}_{file.filename}"
+    contents = await file.read()
+    file_key = f"uploads/{uuid.uuid4()}_{file.filename}"
 
-        # Subir el archivo a S3
+    try:
+        # Subida del archivo a S3
         s3_client.put_object(Bucket=BUCKET_NAME, Key=file_key, Body=contents)
         print(f"✅ Archivo subido: bucket={BUCKET_NAME}, key={file_key}")
 
-        # Iniciar análisis con Textract
+        # Llamado a Textract
         response = textract_client.start_document_text_detection(
             DocumentLocation={"S3Object": {"Bucket": BUCKET_NAME, "Name": file_key}}
         )
         job_id = response["JobId"]
-        print(f"🚀 Análisis iniciado con JobId: {job_id}")
-
+        print(f"✅ Análisis iniciado con JobId: {job_id}")
         return {"message": "Análisis iniciado", "job_id": job_id}
-
     except Exception as e:
         print(f"❌ ERROR al iniciar Textract: {e}")
         return JSONResponse(content={"error": f"Error iniciando Textract: {str(e)}"}, status_code=500)
@@ -52,7 +48,5 @@ def get_results(job_id: str):
             return {"text": text}
         else:
             return {"status": status}
-
     except Exception as e:
-        print(f"❌ ERROR obteniendo resultados: {e}")
         return JSONResponse(content={"error": f"Error obteniendo resultados: {str(e)}"}, status_code=500)
